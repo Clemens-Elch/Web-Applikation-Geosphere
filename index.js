@@ -15,6 +15,32 @@ function renderStation54(timestamps, temperatures) {
                 <div class="col-3">
                    ${new Date(timestamp).toLocaleString()}
                 </div>
+                <div class="col-3">
+                    ${temperature} °C
+                </div>
+            </div>
+        `;
+        detailsList.innerHTML += userRow;
+    });
+}
+
+function renderStation16413(timestamps, temperatures) {
+    const detailsList = document.getElementById("station16413");
+    detailsList.innerHTML = "";
+
+    if (!Array.isArray(timestamps) || !Array.isArray(temperatures)) {
+        detailsList.innerHTML = "<p>Invalid data received.</p>";
+        return;
+    }
+
+    timestamps.forEach((timestamp, i) => {
+        const temperature = temperatures[i] ?? "N/A";
+
+        const userRow = `
+            <div class="row border-bottom py-2">
+                <div class="col-3">
+                   ${new Date(timestamp).toLocaleString()}
+                </div>
                 <div class="col-2">
                     ${temperature} °C
                 </div>
