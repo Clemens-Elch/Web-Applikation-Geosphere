@@ -15,7 +15,19 @@ window.addEventListener("DOMContentLoaded", () => {
         dropdownButton.textContent = "Graz-Straßgang"; // update label
         loadStationData(16413);
     });
+    setStartDay()
+    setEndDay()
 });
+
+// set date as default in date input
+function setStartDay() {
+    document.getElementById("dateStart").value = "2020-01-01";
+}
+
+function setEndDay() {
+    let today = new Date().toISOString().split("T")[0]
+    document.getElementById("dateEnd").value = today;
+}
 
 
 function renderStationData(timestamps, temperatures) {
