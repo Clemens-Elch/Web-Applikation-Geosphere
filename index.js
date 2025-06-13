@@ -7,21 +7,29 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("leibnitz-wagna").addEventListener("click", (e) => {
         e.preventDefault();
         dropdownButton.textContent = "Leibnitz-Wagna"; // update label
-        loadStationData(54);
+        selectedStationId = 54;
     });
 
     document.getElementById("graz-strassgang").addEventListener("click", (e) => {
         e.preventDefault();
         dropdownButton.textContent = "Graz-Straßgang"; // update label
-        loadStationData(16413);
+        selectedStationId = 16413;
     });
     setStartDay()
     setEndDay()
+
+    document.getElementById("loadDataBtn").addEventListener("click", () => {
+        if (selectedStationId) {
+            loadStationData(selectedStationId);
+        } else {
+            alert("Please select a station.");
+        }
+    });
 });
 
 // set date as default in date input
 function setStartDay() {
-    document.getElementById("dateStart").value = "2020-01-01";
+    document.getElementById("dateStart").value = "2025-01-01";
 }
 
 function setEndDay() {
@@ -59,9 +67,34 @@ function renderStationData(timestamps, temperatures) {
 
 async function loadStationData(id) {
     if (!id) return; // no station selected
+    //getting my dates and formatting them
+    const startDate = document.getElementById("dateStart").value;
+    const endDate = document.getElementById("dateEnd").value;
+
+    if (!startDate || !endDate) {
+        alert("Start or end date missing");
+        return;
+    }
+
+    // Convert to Date objects for comparison
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Calculate the difference in days
+    const diffTime = Math.abs(end - start);
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    if (diffDays > 10) {
+        alert("The date range must not exceed 10 days.");
+        return;
+    }
+
+    const startISO = `${startDate}T00:00:00Z`;
+    const endISO = `${endDate}T23:59:59Z`;
+
     try {
         const response = await fetch(`
-                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=tl&start=2024-01-01T00:00:00Z&end=2025-01-01T23:59:59Z`
+                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=tl&start=${startISO}&end=${endISO}`
         );
         const data = await response.json();
 
