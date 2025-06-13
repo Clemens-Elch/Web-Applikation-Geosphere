@@ -26,7 +26,11 @@ window.addEventListener("DOMContentLoaded", () => {
             alert("Please select a station.");
         }
     });
-    document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => cb.checked = false);
+    //temperature checkbox is always checked now when loading
+    document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => {
+        cb.checked = cb.value === 'tl';
+    });
+
 
     document.getElementById("selectAll").addEventListener("change", function () {
         const checked = this.checked;
