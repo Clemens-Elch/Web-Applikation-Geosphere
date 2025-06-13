@@ -1,5 +1,6 @@
 // set station Id to select of menu + loads station with select
 // leaves the selected station in the menu
+let selectedStationId = null;
 
 window.addEventListener("DOMContentLoaded", () => {
     const dropdownButton = document.getElementById("dropdownMenuButton");
@@ -15,8 +16,8 @@ window.addEventListener("DOMContentLoaded", () => {
         dropdownButton.textContent = "Graz-Straßgang"; // update label
         selectedStationId = 16413;
     });
-    setStartDay()
     setEndDay()
+    setStartDay()
 
     document.getElementById("loadDataBtn").addEventListener("click", () => {
         if (selectedStationId) {
@@ -25,44 +26,67 @@ window.addEventListener("DOMContentLoaded", () => {
             alert("Please select a station.");
         }
     });
+    document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+    document.getElementById("selectAll").addEventListener("change", function () {
+        const checked = this.checked;
+        document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => {
+            cb.checked = checked;
+        });
+    });
+    document.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            document.getElementById("loadDataBtn").click();
+        }
+    });
+
 });
 
 // set date as default in date input
 function setStartDay() {
-    document.getElementById("dateStart").value = "2025-01-01";
+    const endDate = new Date(document.getElementById("dateEnd").value);
+    endDate.setDate(endDate.getDate() - 9);
+    const startDateStr = endDate.toISOString().split("T")[0];
+    document.getElementById("dateStart").value = startDateStr;
 }
-
 function setEndDay() {
     let today = new Date().toISOString().split("T")[0]
     document.getElementById("dateEnd").value = today;
 }
 
+function getSelectedParameters() {
+    const checkboxes = document.querySelectorAll('#parameterSelection input[type="checkbox"]:checked');
+    return Array.from(
+        document.querySelectorAll('#parameterSelection input[type="checkbox"]:checked')
+    )
+        .map(cb => cb.value)
+        .filter(val => val !== 'selectAll');
+}
 
-function renderStationData(timestamps, temperatures) {
+
+function renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams) {
     const detailsList = document.getElementById("stationData");
-    detailsList.innerHTML = "";
-// checks if timestamps and temperatures are valid arrays
-    if (!Array.isArray(timestamps) || !Array.isArray(temperatures)) {
-        detailsList.innerHTML = "Error";
-        return;
-    }
 
-    //?? is a null-save fallback for null and undefined data - it replaces with string "N/A"
+    let html = `<div class="row fw-bold border-bottom py-2">`;
+    html += `<div class="col-2">Date</div>`;
+    if (selectedParams.includes("tl")) html += `<div class="col-2">Avg Temp (°C)</div>`;
+    if (selectedParams.includes("ff")) html += `<div class="col-2">Avg Wind (m/s)</div>`;
+    if (selectedParams.includes("rr")) html += `<div class="col-2">Rainfall (mm)</div>`;
+    if (selectedParams.includes("so_h")) html += `<div class="col-2">Sunshine (h)</div>`;
+    html += `</div>`;
 
-    timestamps.forEach((timestamp, i) => {
-
-        const userRow = `
-            <div class="row border-bottom py-2">
-                <div class="col-3">
-                   ${new Date(timestamp).toLocaleString()}
-                </div>
-                <div class="col-3">
-                    ${temperatures[i] ?? "N/A"} °C
-                </div>
-            </div>
-        `;
-        detailsList.innerHTML += userRow;
+    dates.forEach((date, i) => {
+        html += `<div class="row border-bottom py-2">`;
+        html += `<div class="col-2">${date}</div>`;
+        if (selectedParams.includes("tl")) html += `<div class="col-2">${avgTemp[i]}</div>`;
+        if (selectedParams.includes("ff")) html += `<div class="col-2">${avgWind[i]}</div>`;
+        if (selectedParams.includes("rr")) html += `<div class="col-2">${totalRain[i]}</div>`;
+        if (selectedParams.includes("so_h")) html += `<div class="col-2">${totalSun[i]}</div>`;
+        html += `</div>`;
     });
+
+    detailsList.innerHTML = html;
 }
 
 async function loadStationData(id) {
@@ -93,8 +117,14 @@ async function loadStationData(id) {
     const endISO = `${endDate}T23:59:59Z`;
 
     try {
+        const selectedParams = getSelectedParameters();
+        if (selectedParams.length === 0) {
+            alert("Please select at least one parameter.");
+            return;
+        }
+        const paramString = selectedParams.join(",");
         const response = await fetch(`
-                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=tl&start=${startISO}&end=${endISO}`
+                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=${paramString}&start=${startISO}&end=${endISO}`
         );
         const data = await response.json();
 
@@ -108,24 +138,87 @@ async function loadStationData(id) {
             firstFeature?.properties?.parameters?.tl?.data &&
             Array.isArray(firstFeature.properties.parameters.tl.data)
         ) {
-            temperatures = firstFeature.properties.parameters.tl.data;
+            temperatures = firstFeature?.properties?.parameters?.tl?.data ?? [];
         }
 
-        const midday = [];
-        const middayTemperatures = [];
+        let wind = [];
+        // safely checks if the wind data (ff.data) exists and is a valid array before assigning it to the wind variable.
+        if (
+            firstFeature?.properties?.parameters?.ff?.data &&
+            Array.isArray(firstFeature.properties.parameters.ff.data)
+        ) {
+            wind = firstFeature?.properties?.parameters?.ff?.data ?? [];
 
-        timestamps.forEach((ts, index) => {
-            const date = new Date(ts);
-            const hours = date.getUTCHours();
-            const minutes = date.getUTCMinutes();
+        }
 
-            if (hours === 12 && minutes === 0 && temperatures[index] !== null && temperatures[index] !== undefined) {
-                midday.push(ts);
-                middayTemperatures.push(temperatures[index]);
+        let rainfall = [];
+        // safely checks if the rainfall data (rr.data) exists and is a valid array before assigning it to the rainfall variable.
+        if (
+            firstFeature?.properties?.parameters?.rr?.data &&
+            Array.isArray(firstFeature.properties.parameters.rr.data)
+        ) {
+            rainfall = firstFeature?.properties?.parameters?.rr?.data ?? [];
+
+        }
+
+        let hoursOfSunshine = [];
+        // safely checks if the sun data (so_h.data) exists and is a valid array before assigning it to the sun variable.
+        if (
+            firstFeature?.properties?.parameters?.so_h?.data &&
+            Array.isArray(firstFeature.properties.parameters.so_h.data)
+        ) {
+            hoursOfSunshine = firstFeature?.properties?.parameters?.so_h?.data ?? [];
+
+        }
+
+
+        const dailyData = {}; // map date -> accumulators
+
+        timestamps.forEach((ts, i) => {
+            const dt = new Date(ts);
+            const dateStr = dt.toISOString().split("T")[0];
+
+            if (!dailyData[dateStr]) {
+                dailyData[dateStr] = {
+                    tempCount: 0, windCount: 0, rainCount: 0, sunCount: 0,
+                    sumTemp: 0, sumWind: 0, sumRain: 0, sumSun: 0
+                };
+            }
+
+            const day = dailyData[dateStr];
+
+            if (temperatures[i] != null) {
+                day.sumTemp += temperatures[i];
+                day.tempCount += 1;
+            }
+            if (wind[i] != null) {
+                day.sumWind += wind[i];
+                day.windCount += 1;
+            }
+            if (rainfall[i] != null) {
+                day.sumRain += rainfall[i];
+                day.rainCount += 1;
+            }
+            if (hoursOfSunshine[i] != null) {
+                day.sumSun += hoursOfSunshine[i];
+                day.sunCount += 1;
             }
         });
 
-        renderStationData(midday, middayTemperatures);
+// Now build arrays of averages
+        const dates = Object.keys(dailyData).sort();
+        const avgTemp = [], avgWind = [], totalRain = [], totalSun = [];
+
+        dates.forEach(dayStr => {
+            const d = dailyData[dayStr];
+            avgTemp.push(d.tempCount ? (d.sumTemp / d.tempCount).toFixed(2) : "-");
+            avgWind.push(d.windCount ? (d.sumWind / d.windCount).toFixed(2) : "-");
+            totalRain.push(d.rainCount ? d.sumRain.toFixed(2) : "-");
+            totalSun.push(d.sunCount ? d.sumSun.toFixed(2) : "-");
+        });
+
+// Render
+        renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams);
     } catch (error) {
         console.error("Error loading details:", error);
     }
