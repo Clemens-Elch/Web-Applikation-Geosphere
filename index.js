@@ -26,6 +26,21 @@ window.addEventListener("DOMContentLoaded", () => {
             alert("Please select a station.");
         }
     });
+    document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+    document.getElementById("selectAll").addEventListener("change", function () {
+        const checked = this.checked;
+        document.querySelectorAll('#parameterSelection input[type="checkbox"]').forEach(cb => {
+            cb.checked = checked;
+        });
+    });
+    document.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            document.getElementById("loadDataBtn").click();
+        }
+    });
+
 });
 
 // set date as default in date input
@@ -40,26 +55,37 @@ function setEndDay() {
     document.getElementById("dateEnd").value = today;
 }
 
+function getSelectedParameters() {
+    const checkboxes = document.querySelectorAll('#parameterSelection input[type="checkbox"]:checked');
+    return Array.from(
+        document.querySelectorAll('#parameterSelection input[type="checkbox"]:checked')
+    )
+        .map(cb => cb.value)
+        .filter(val => val !== 'selectAll');
+}
 
-function renderStationData(dates, avgTemp, avgWind, totalRain, totalSun) {
+
+function renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams) {
     const detailsList = document.getElementById("stationData");
-    let html = `
-    <div class="row fw-bold border-bottom py-2">
-      <div class="col-2">Date</div><div class="col-2">Avg Temp (°C)</div>
-      <div class="col-2">Avg Wind (m/s)</div><div class="col-2">Rainfall (mm)</div>
-      <div class="col-2">Sunshine (h)</div>
-    </div>
-  `;
+
+    let html = `<div class="row fw-bold border-bottom py-2">`;
+    html += `<div class="col-2">Date</div>`;
+    if (selectedParams.includes("tl")) html += `<div class="col-2">Avg Temp (°C)</div>`;
+    if (selectedParams.includes("ff")) html += `<div class="col-2">Avg Wind (m/s)</div>`;
+    if (selectedParams.includes("rr")) html += `<div class="col-2">Rainfall (mm)</div>`;
+    if (selectedParams.includes("so_h")) html += `<div class="col-2">Sunshine (h)</div>`;
+    html += `</div>`;
+
     dates.forEach((date, i) => {
-        html += `
-      <div class="row border-bottom py-2">
-        <div class="col-2">${date}</div>
-        <div class="col-2">${avgTemp[i]}</div>
-        <div class="col-2">${avgWind[i]}</div>
-        <div class="col-2">${totalRain[i]}</div>
-        <div class="col-2">${totalSun[i]}</div>
-      </div>`;
+        html += `<div class="row border-bottom py-2">`;
+        html += `<div class="col-2">${date}</div>`;
+        if (selectedParams.includes("tl")) html += `<div class="col-2">${avgTemp[i]}</div>`;
+        if (selectedParams.includes("ff")) html += `<div class="col-2">${avgWind[i]}</div>`;
+        if (selectedParams.includes("rr")) html += `<div class="col-2">${totalRain[i]}</div>`;
+        if (selectedParams.includes("so_h")) html += `<div class="col-2">${totalSun[i]}</div>`;
+        html += `</div>`;
     });
+
     detailsList.innerHTML = html;
 }
 
@@ -91,8 +117,14 @@ async function loadStationData(id) {
     const endISO = `${endDate}T23:59:59Z`;
 
     try {
+        const selectedParams = getSelectedParameters();
+        if (selectedParams.length === 0) {
+            alert("Please select at least one parameter.");
+            return;
+        }
+        const paramString = selectedParams.join(",");
         const response = await fetch(`
-                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=tl,ff,rr,so_h&start=${startISO}&end=${endISO}`
+                    https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1h?station_ids=${id}&parameters=${paramString}&start=${startISO}&end=${endISO}`
         );
         const data = await response.json();
 
@@ -139,29 +171,6 @@ async function loadStationData(id) {
 
         }
 
-        const midday = [];
-        const middayTemperatures = [];
-        const middayWind = [];
-        const middayRainfall = [];
-        const middayHoursOfSunshine = [];
-
-        timestamps.forEach((ts, index) => {
-            const date = new Date(ts);
-            if (
-                date.getUTCHours() === 12 &&
-                date.getUTCMinutes() === 0 &&
-                temperatures[index] != null &&
-                wind[index] != null &&
-                rainfall[index] != null &&
-                hoursOfSunshine[index] != null
-            ) {
-                midday.push(ts);
-                middayTemperatures.push(temperatures[index]);
-                middayWind.push(wind[index]);
-                middayRainfall.push(rainfall[index]);
-                middayHoursOfSunshine.push(hoursOfSunshine[index]);
-            }
-        });
 
         const dailyData = {}; // map date -> accumulators
 
@@ -170,13 +179,30 @@ async function loadStationData(id) {
             const dateStr = dt.toISOString().split("T")[0];
 
             if (!dailyData[dateStr]) {
-                dailyData[dateStr] = { count: 0, sumTemp: 0, sumWind: 0, sumRain: 0, sumSun: 0 };
+                dailyData[dateStr] = {
+                    tempCount: 0, windCount: 0, rainCount: 0, sunCount: 0,
+                    sumTemp: 0, sumWind: 0, sumRain: 0, sumSun: 0
+                };
             }
+
             const day = dailyData[dateStr];
-            if (temperatures[i] != null) { day.sumTemp += temperatures[i]; day.count += 1; }
-            if (wind[i] != null) { day.sumWind += wind[i]; }
-            if (rainfall[i] != null) { day.sumRain += rainfall[i]; }
-            if (hoursOfSunshine[i] != null) { day.sumSun += hoursOfSunshine[i]; }
+
+            if (temperatures[i] != null) {
+                day.sumTemp += temperatures[i];
+                day.tempCount += 1;
+            }
+            if (wind[i] != null) {
+                day.sumWind += wind[i];
+                day.windCount += 1;
+            }
+            if (rainfall[i] != null) {
+                day.sumRain += rainfall[i];
+                day.rainCount += 1;
+            }
+            if (hoursOfSunshine[i] != null) {
+                day.sumSun += hoursOfSunshine[i];
+                day.sunCount += 1;
+            }
         });
 
 // Now build arrays of averages
@@ -185,14 +211,14 @@ async function loadStationData(id) {
 
         dates.forEach(dayStr => {
             const d = dailyData[dayStr];
-            avgTemp.push((d.sumTemp / d.count).toFixed(2));
-            avgWind.push((d.sumWind / d.count).toFixed(2));
-            totalRain.push(d.sumRain.toFixed(2));
-            totalSun.push(d.sumSun.toFixed(2));
+            avgTemp.push(d.tempCount ? (d.sumTemp / d.tempCount).toFixed(2) : "-");
+            avgWind.push(d.windCount ? (d.sumWind / d.windCount).toFixed(2) : "-");
+            totalRain.push(d.rainCount ? d.sumRain.toFixed(2) : "-");
+            totalSun.push(d.sunCount ? d.sumSun.toFixed(2) : "-");
         });
 
 // Render
-        renderStationData(dates, avgTemp, avgWind, totalRain, totalSun);
+        renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams);
     } catch (error) {
         console.error("Error loading details:", error);
     }
