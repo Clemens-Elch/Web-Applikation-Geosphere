@@ -69,29 +69,80 @@ function getSelectedParameters() {
 }
 
 
-function renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams) {
+function renderStationData(dates, avgTemp, avgWind, totalRain, totalSun, selectedParams, sortKey = "date", sortDirection = "asc") {
     const detailsList = document.getElementById("stationData");
 
-    let html = `<div class="row fw-bold border-bottom py-2">`;
-    html += `<div class="col-2">Date</div>`;
-    if (selectedParams.includes("tl")) html += `<div class="col-2">Avg Temp (°C)</div>`;
-    if (selectedParams.includes("ff")) html += `<div class="col-2">Avg Wind (m/s)</div>`;
-    if (selectedParams.includes("rr")) html += `<div class="col-2">Rainfall (mm)</div>`;
-    if (selectedParams.includes("so_h")) html += `<div class="col-2">Sunshine (h)</div>`;
-    html += `</div>`;
+    // Combine into a single array of objects
+    const combinedData = [];
+    for (let i = 0; i < dates.length; i++) {
+        combinedData.push({
+            date: dates[i],
+            tl: avgTemp[i],
+            ff: avgWind[i],
+            rr: totalRain[i],
+            so_h: totalSun[i]
+        });
+    }
 
-    dates.forEach((date, i) => {
-        html += `<div class="row border-bottom py-2">`;
-        html += `<div class="col-2">${date}</div>`;
-        if (selectedParams.includes("tl")) html += `<div class="col-2">${avgTemp[i]}</div>`;
-        if (selectedParams.includes("ff")) html += `<div class="col-2">${avgWind[i]}</div>`;
-        if (selectedParams.includes("rr")) html += `<div class="col-2">${totalRain[i]}</div>`;
-        if (selectedParams.includes("so_h")) html += `<div class="col-2">${totalSun[i]}</div>`;
-        html += `</div>`;
+    // Sort logic
+    combinedData.sort((a, b) => {
+        let valA = a[sortKey];
+        let valB = b[sortKey];
+
+        if (!isNaN(valA) && !isNaN(valB)) {
+            valA = parseFloat(valA);
+            valB = parseFloat(valB);
+        }
+
+        if (valA === "-") return 1;
+        if (valB === "-") return -1;
+
+        return sortDirection === "asc" ? valA - valB : valB - valA;
     });
 
+    // Table headers
+    let html = `<div class="row fw-bold border-bottom py-2">`;
+    html += `<div class="col-2 sortable" data-key="date">Date</div>`;
+    if (selectedParams.includes("tl")) html += `<div class="col-2 sortable" data-key="tl">Avg Temp (°C)</div>`;
+    if (selectedParams.includes("ff")) html += `<div class="col-2 sortable" data-key="ff">Avg Wind (m/s)</div>`;
+    if (selectedParams.includes("rr")) html += `<div class="col-2 sortable" data-key="rr">Rainfall (mm)</div>`;
+    if (selectedParams.includes("so_h")) html += `<div class="col-2 sortable" data-key="so_h">Sunshine (h)</div>`;
+    html += `</div>`;
+
+    // Table rows
+    for (const entry of combinedData) {
+        html += `<div class="row border-bottom py-2">`;
+        html += `<div class="col-2">${entry.date}</div>`;
+        if (selectedParams.includes("tl")) html += `<div class="col-2">${entry.tl}</div>`;
+        if (selectedParams.includes("ff")) html += `<div class="col-2">${entry.ff}</div>`;
+        if (selectedParams.includes("rr")) html += `<div class="col-2">${entry.rr}</div>`;
+        if (selectedParams.includes("so_h")) html += `<div class="col-2">${entry.so_h}</div>`;
+        html += `</div>`;
+    }
+
     detailsList.innerHTML = html;
+
+    // Sorting event listeners
+    document.querySelectorAll(".sortable").forEach(header => {
+        header.addEventListener("click", () => {
+            const key = header.dataset.key;
+            const newDirection = (key === sortKey && sortDirection === "desc") ? "asc" : "desc";
+
+            // Deconstruct arrays manually
+            const newDates = [], newTemp = [], newWind = [], newRain = [], newSun = [];
+            for (const row of combinedData) {
+                newDates.push(row.date);
+                newTemp.push(row.tl);
+                newWind.push(row.ff);
+                newRain.push(row.rr);
+                newSun.push(row.so_h);
+            }
+
+            renderStationData(newDates, newTemp, newWind, newRain, newSun, selectedParams, key, newDirection);
+        });
+    });
 }
+
 
 async function loadStationData(id) {
     if (!id) return; // no station selected
